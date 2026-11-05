@@ -1,0 +1,27 @@
+# 本 bundle 的 patch 层：往 profile 的插件树里插入一行。
+# - id    : 后续 patch 按 id 定向覆盖该行（disable、改 config）
+# - name  : 与 package.json 的 name 一致，Loader 据此 import 本包
+# - config: 传给 apply(ctx, config) 的第二个参数；整体替换而非深合并
+- insert:
+    - id: dsh-dingtalk
+      name: '@local/dsh-dingtalk'
+      config:
+        # 钉钉企业内部应用的 AppKey / AppSecret（Stream 模式机器人）。
+        # ⚠️ 请勿在此提交真实密钥：留空即可，实际密钥填到 profile 的 cordis.patch.yml 覆盖层。
+        clientId: ''
+        clientSecret: ''
+        # 每个钉钉会话对应一个 agent 会话；使用该 agent preset（默认 standard）。
+        agentPreset: standard
+        # agent 会话的工作目录（绝对路径）。留空使用 Harness 进程的 cwd。
+        workspacePath: ''
+        # 可选：覆盖默认模型（provider / model）；留空沿用 Harness 当前默认模型。
+        provider: ''
+        model: ''
+        # 群聊回复时 @ 提问者。
+        replyMention: true
+        # 单条回复的最大字符数（超出截断）。
+        maxReplyLength: 20000
+        # 可选：仅响应的钉钉会话 conversationId 白名单（空数组 = 全部）。
+        conversations: []
+        # 打印连接/收发日志（排障时可临时改为 true）。
+        debug: false

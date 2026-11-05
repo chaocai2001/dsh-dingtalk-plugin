@@ -1,0 +1,4 @@
+{
+  "title": "DingTalk · 钉钉接入",
+  "description": "通过钉钉 Stream 模式机器人使用 Harness：把群聊/单聊消息路由到 agent 会话并把回复发回钉钉。"
+}
