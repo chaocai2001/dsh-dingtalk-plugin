@@ -120,6 +120,14 @@ function stripMention(raw) {
   return String(raw ?? '').replace(/^\s*(?:@[^\s]+\s*)+/, '').trim()
 }
 
+/** 触发「开启新会话」的指令（@机器人 后发送，或单聊直接发送）。 */
+const RESET_COMMANDS = ['/new', '/reset', '/clear', '新会话', '清空会话', '重置会话', '清空上下文', '重开对话']
+
+function isResetCommand(text) {
+  const t = text.trim().toLowerCase()
+  return RESET_COMMANDS.some((cmd) => t === cmd.toLowerCase())
+}
+
 function truncate(text, max) {
   if (text.length <= max) return text
   return `${text.slice(0, max)}\n…（回复过长已截断）`
@@ -168,6 +176,8 @@ export function apply(ctx, rawConfig) {
   const sessions = new Map()
   // 首次创建会话的去重：并发首条消息只创建一次
   const inflight = new Map()
+  // conversationId -> 当前使用的会话 id（「新会话」后换成带随机后缀的新 id）
+  const sessionIds = new Map()
   let ws = null
   let reconnectTimer = null
   let stopped = false
@@ -254,7 +264,7 @@ export function apply(ctx, rawConfig) {
   }
 
   async function openSession(conversationId) {
-    const sessionId = stableSessionId(conversationId)
+    const sessionId = sessionIds.get(conversationId) ?? stableSessionId(conversationId)
 
     // 可选：解析并挂载 agent preset（给 agent 装上工具）。
     const presetService = ctx.get('agentPresets')
@@ -382,6 +392,18 @@ export function apply(ctx, rawConfig) {
     return promise
   }
 
+  /** 开启新会话：丢弃当前会话，为下一条消息指派一个带随机后缀的新会话 id。 */
+  function resetSession(conversationId) {
+    const entry = sessions.get(conversationId)
+    if (entry) {
+      sessions.delete(conversationId)
+      entry.handle?.dispose?.().catch(() => {})
+    }
+    inflight.delete(conversationId)
+    sessionIds.set(conversationId, `${stableSessionId(conversationId)}-${randomUUID().slice(0, 8)}`)
+    debugLog(`reset session for conversation ${conversationId}`)
+  }
+
   async function handleRobotMessage(robotMessage) {
     const conversationId = robotMessage?.conversationId
     if (!conversationId) return
@@ -394,6 +416,15 @@ export function apply(ctx, rawConfig) {
     const text = stripMention(robotMessage.text?.content)
     if (text === '') return
     state.received += 1
+
+    // 「新会话」指令：丢弃当前会话，下一条消息开启全新 agent 会话。
+    if (isResetCommand(text)) {
+      resetSession(conversationId)
+      try {
+        await replyTo(robotMessage, '已开启新会话。')
+      } catch { /* 忽略回复失败 */ }
+      return
+    }
 
     try {
       const entry = await getOrCreateEntry(conversationId)
